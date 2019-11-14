@@ -1,4 +1,4 @@
-
+#include "DownloadPDB.h"
 #include <stdio.h>
 #include "NTAPI.h"
 
@@ -191,58 +191,52 @@ VOID SymbolServerGetIndexString(GUID *pGuid, unsigned int ulVal1, unsigned int u
     CatStrDWORD(pstr, ulVal2, size);
 }
 
-int wmain( int argc, wchar_t *argv[ ], wchar_t *envp[ ] )
+char* GetPdbName(const wchar_t* filename, char* pdburl, int buflen)
 {
-    int ret = -1;
+    static int init = 0;
+    WCHAR wchFilePath[MAX_PATH];
+    UNICODE_STRING usFilePath;
 
-    if (argc == 2)
+    if (init == 0)
     {
-        WCHAR wchFilePath[MAX_PATH];
-        UNICODE_STRING usFilePath;
-        //
-        if (argv[1][1] == L':')
-        {
-            wcscpy_s(wchFilePath, sizeof(wchFilePath)/2, L"\\??\\");
-            wcscat_s(wchFilePath, sizeof(wchFilePath)/2, argv[1]);
-        }
-
-        usFilePath.Buffer = wchFilePath;
-        usFilePath.Length = wcslen(usFilePath.Buffer) * 2;
-        usFilePath.MaximumLength = usFilePath.Length;
-
         Init_NTAPI();
-        SIZE_T Size = 0;
-        PVOID BaseAddress = OpenAndMapFile(&usFilePath, &Size);
-        if (BaseAddress)
+        init = 1;
+    }
+    //
+    if (filename[1] == L':')
+    {
+        wcscpy_s(wchFilePath, sizeof(wchFilePath)/2, L"\\??\\");
+        wcscat_s(wchFilePath, sizeof(wchFilePath)/2, filename);
+    }
+
+    usFilePath.Buffer = wchFilePath;
+    usFilePath.Length = wcslen(usFilePath.Buffer) * 2;
+    usFilePath.MaximumLength = usFilePath.Length;
+
+
+    SIZE_T Size = 0;
+    PVOID BaseAddress = OpenAndMapFile(&usFilePath, &Size);
+    if (BaseAddress)
+    {
+        CHAR PdbFileName[MAX_PATH];
+        GUID guid;
+        DWORD age;
+
+        PeGetPdb(BaseAddress, Size, PdbFileName, &guid, &age);
+        ZwUnmapViewOfSection(ZwCurrentProcess(), BaseAddress);
+
+        if (PdbFileName[1] == ':')
         {
-            CHAR PdbFileName[MAX_PATH];
-            GUID guid;
-            DWORD age;
-
-            PeGetPdb(BaseAddress, Size, PdbFileName, &guid, &age);
-            ZwUnmapViewOfSection(ZwCurrentProcess(), BaseAddress);
-
+            strncpy(pdburl, PdbFileName, buflen);
+        }
+        else
+        {
             CHAR StrGuid[40];
             SymbolServerGetIndexString(&guid, age, 0, StrGuid, sizeof(StrGuid));
-
-            CHAR pchPdbUrl[1024];
-            strcpy_s(pchPdbUrl, sizeof(pchPdbUrl), "http://msdl.microsoft.com/download/symbols/");
-            strcat_s(pchPdbUrl, sizeof(pchPdbUrl), PdbFileName);
-            strcat_s(pchPdbUrl, sizeof(pchPdbUrl), "/");
-            strcat_s(pchPdbUrl, sizeof(pchPdbUrl), StrGuid);
-            strcat_s(pchPdbUrl, sizeof(pchPdbUrl), "/");
-            strcat_s(pchPdbUrl, sizeof(pchPdbUrl), PdbFileName);
-            printf("%s\n", pchPdbUrl);
-
-            ret = 0;
+            sprintf_s(pdburl, buflen, "http://msdl.microsoft.com/download/symbols/%s/%s/%s", PdbFileName, StrGuid, PdbFileName);
         }
+
+        return pdburl;
     }
-    
-    if (ret)
-    {
-        printf("usage : dPDB <FileName>\n");
-    }
-    
-    getchar();
-    return 0;
+    return NULL;
 }
