@@ -5,7 +5,6 @@
 #include <Urlmon.h>
 #include <Shlwapi.h>
 #pragma comment(lib, "Urlmon.lib")
-#pragma comment(lib, "StringFormat")
 #pragma comment(lib, "shlwapi")
 
 BOOL DownFile(const wchar_t* dllName)
